@@ -22,6 +22,23 @@ const DEFAULT_BASEURL = ['{', PROTOCOL_KEY, '}://{', HOST_KEY, '}:{', PORT_KEY, 
 const DEFAULT_CONFIG_FOLDER = 'config';
 const DEFAULT_CONFIG_NAME = 'default';
 
+module.exports = Object.assign(configuration, {
+  BASEURL_KEY,
+  CONNECTORS_KEY,
+  ENV_KEY,
+  HOST_KEY,
+  MIDDLEWARES_KEY,
+  MOUNTPATH_KEY,
+  PORT_KEY,
+  PROTOCOL_KEY,
+  DEFAULT_BASEDIR,
+  DEFAULT_BASEURL,
+  DEFAULT_CONFIG_FOLDER,
+  DEFAULT_CONFIG_NAME,
+  middlewares,
+  schema
+});
+
 convict.addFormat({
   name: 'placeholder',
   validate: function(val) {
@@ -33,10 +50,6 @@ convict.addFormat({
     return val.replace(/\{([\w\.]+)}/g, function(v,m) { return config.get(m); });
   }
 });
-
-exports = module.exports = configuration;
-exports.middlewares = middlewares;
-exports.schema = schema;
 
 function configuration(basedir, configFolder) {
   basedir = basedir || DEFAULT_BASEDIR;
@@ -109,7 +122,7 @@ function normalizeConnectors(config) {
     return config;
   }
 
-  const env = config.get('env');
+  const env = config.get(ENV_KEY);
   const connectors = {};
 
   if (db === true) {
