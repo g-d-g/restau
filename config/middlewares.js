@@ -78,7 +78,9 @@ module.exports =  {
   multipart: {
     enabled: true,
     priority: 80,
-    module: __dirname + '/../middlewares/multipart'
+    module: {
+      name: __dirname + '/../middlewares/multipart'
+    }
   },
   cookieParser: {
     enabled: false,
@@ -126,9 +128,19 @@ module.exports =  {
       ]
     }
   },
+  services: {
+    enabled: true,
+    priority: 120,
+    module: {
+      name: __dirname + '/../middlewares/screws',
+      arguments: [
+        './services'
+      ]
+    }
+  },
   router: {
     enabled: false,
-    priority: 120,
+    priority: 130,
     module: {
       name: 'express-enrouten',
       arguments: [

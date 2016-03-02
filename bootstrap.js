@@ -2,8 +2,11 @@
 
 const configurator = require('./config');
 const {isFunction, isObject, isString} = require('core-util-is');
+const knex = require('knex');
+const mapObject = require('map-obj');
 const meddleware = require('meddleware');
 
+const {CONNECTORS_KEY, MIDDLEWARES_KEY, SERVICES_KEY} = configurator;
 const VIEW_CONFIG_KEYS = ['views', 'view engine', 'view cache'];
 
 module.exports = bootstrap;
@@ -74,8 +77,6 @@ function bootstrap(options) {
   }
 
   function initSettings(app) {
-    console.log('INI SETTINGS')
-
     // If this application is mounted on a parent app we need to make sure
     // the two work together cleanly and appropriate settings are inherited.
     if (isFunction(app.parent)) {
@@ -115,12 +116,9 @@ function bootstrap(options) {
         config.express[name] = app.get(name);
       });
     }
-
     // If options.mountpath was set, override config settings.
     config.express.mountpath = ((typeof options.mountpath === 'string') && options.mountpath !== '/') ? options.mountpath : app.get('mountpath');
-    // config.express.mountpath = '/api'; // XXX NOT WORK!
 
-    console.log('XYZ')
     setObject(app, config);
 
     console.log('express settings\n', app.settings);
@@ -129,7 +127,6 @@ function bootstrap(options) {
   }
 
   function initViews(app) {
-console.log('INI VIEWS')
     var engines = app.get('view engines') || {};
 
     console.log('initializing views');
@@ -165,7 +162,7 @@ console.log('INI VIEWS')
 
   function initMiddlewares(app) {
     console.log('INI MWS', app.get('mountpath'))
-    const mws = app.get('middlewares');
+    const mws = app.get(MIDDLEWARES_KEY);
 
     app.use(app.get('mountpath'), meddleware(mws));
 
@@ -173,7 +170,6 @@ console.log('INI VIEWS')
   }
 
   function initEvents(app) {
-console.log('INI EVENTS')
     var timer;
 
     app.on('shutdown', function onshutdown(server, timeout) {
@@ -197,7 +193,6 @@ console.log('INI EVENTS')
 
   return function () {
     const app = this;
-
     var initializing = true;
     var error;
 
@@ -208,20 +203,16 @@ console.log('INI EVENTS')
       // Since this particular `app` instance is
       // subsequently deleted, the `mountpath` is
       // moved to `options` for use later.
-      /*XXX*///options.mountpath = app.mountpath;
+      options.mountpath = options.mountpath || app.mountpath;
 
-      const emitStart = (a) => {
-        console.log('INIT COMPLETE!');
+      const emitStart = () => {
         initializing = false;
         parent.emit('start');
-        return a;
       };
 
       const emitError = (err) => {
-        console.log('ERROR!!!!!!!', err.stack);
-        parent.emit('error');
         error = err;
-        // return err;
+        parent.emit('error', err);
       };
 
       // Kick off server and add middleware which will block until
@@ -249,6 +240,7 @@ console.log('INI EVENTS')
         if (error) {
           res.status(503);
           res.send('The application failed to start.');
+          console.error(error.stack ? error.stack : error);
           return;
         }
 
@@ -256,4 +248,4 @@ console.log('INI EVENTS')
       });
     });
   };
-}
+};

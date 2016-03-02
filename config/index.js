@@ -13,9 +13,9 @@ const CONNECTORS_KEY = 'database';
 const ENV_KEY = 'env';
 const HOST_KEY = 'host';
 const MIDDLEWARES_KEY = 'middlewares';
-const MOUNTPATH_KEY = 'mountpath';
 const PORT_KEY = 'port';
 const PROTOCOL_KEY = 'protocol';
+const SERVICES_KEY = 'services';
 
 const DEFAULT_BASEDIR = process.cwd();
 const DEFAULT_BASEURL = ['{', PROTOCOL_KEY, '}://{', HOST_KEY, '}:{', PORT_KEY, '}'].join('');
@@ -28,9 +28,9 @@ module.exports = Object.assign(configuration, {
   ENV_KEY,
   HOST_KEY,
   MIDDLEWARES_KEY,
-  MOUNTPATH_KEY,
   PORT_KEY,
   PROTOCOL_KEY,
+  SERVICES_KEY,
   DEFAULT_BASEDIR,
   DEFAULT_BASEURL,
   DEFAULT_CONFIG_FOLDER,
@@ -126,7 +126,7 @@ function normalizeConnectors(config) {
   const connectors = {};
 
   if (db === true) {
-    db = ['.', 'data', [env, 'sqlite3'].join('.')].join(path.sep);
+    db = ['.', [env, 'sqlite3'].join('.')].join(path.sep);
   }
 
   if (isString(db)) {
