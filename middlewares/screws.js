@@ -11,7 +11,7 @@ const {STATUS_CODES} = require('http')
 const JOKER_METHODS = ['DELETE', 'GET', 'POST', 'PUT', 'PATCH'];
 const DEFAULT_RESPONSE_STATUS = 200;
 const DEFAULT_ERROR_STATUS = 500;
-const SUCCESS_LT_STATUS = 200;
+const SUCCESS_LT_STATUS = 400;
 
 module.exports = function (options) {
   if (isString(options)) {

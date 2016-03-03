@@ -3,6 +3,7 @@
 const {HOST_KEY, PORT_KEY} = require('./config');
 const bootstrap = require('./bootstrap');
 const caller = require('caller');
+const configurator = require('./config');
 const {createServer} = require('http');
 const {dirname} = require('path');
 const express = require('express');
@@ -29,6 +30,9 @@ const {isFunction, isObject, isString} = require('core-util-is');
 //   en mode "remote" on transfert la requête vers
 //   un service distant et affiche le résultat en brut
 
+// TODO utiliser endgame
+// endgame(options.uncaughtException);
+
 // XXX MAIN >
 
 process.on('unhandledRejection', function (err) {
@@ -47,24 +51,55 @@ app
 // XXX < MAIN
 
 
-function restau(options) {
-  if (isString(options)) {
-    options = {
-      basedir: options
-    };
-  }
+function restau() {
+  const args = Array.prototype.slice.call(arguments);
+  const options = parseOptions.apply(null, args);
 
-  options = options || {};
   options.basedir = options.basedir || dirname(caller());
-  options.configFolder = arguments.length > 1 && arguments[1];
+  options.config = configurator(options.basedir, options.configFolder, options.config);
 
   const app = express();
+
+  app.config = options.config;
 
   behavior.call(app, behavior)
     .behavior({ configure, start })
     .configure(bootstrap(options));
 
   return app;
+}
+
+function parseOptions() {
+  const args = Array.prototype.slice.call(arguments);
+  const options = {};
+
+  if (isString(args[0])) {
+    options.basedir = args[0];
+  }
+
+  if (isObject(args[0])) {
+    Object.assign(options, args[0]);
+  }
+
+  if (isString(args[1])) {
+    options.configFolder = args[1];
+  }
+
+  if (isObject(args[1])) {
+    options.config = args[1];
+  }
+
+  if (isObject(args[2])) {
+    options.config = args[2];
+  }
+
+  // options.onconfig = options.onconfig || noop; // OUI
+  options.mountpath = options.mountpath || null; // OUI
+  options.inheritViews = !!options.inheritViews;
+  // options.startupHeaders
+  // options.uncaughtException
+
+  return options;
 }
 
 function behavior(name, method) {

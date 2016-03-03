@@ -51,31 +51,39 @@ convict.addFormat({
   }
 });
 
-function configuration(basedir, configFolder) {
+function configuration(basedir, configFolder, dynConfig) {
   basedir = basedir || DEFAULT_BASEDIR;
   configFolder = configFolder || DEFAULT_CONFIG_FOLDER;
 
   const confdir = path.join(basedir, configFolder);
   const config = convict(schema);
   const env = config.get(ENV_KEY);
-  const files = [];
 
-  files.push(path.join(confdir, DEFAULT_CONFIG_NAME));
+  if (isString(basedir)) {
+    const files = [];
 
-  if (env !== DEFAULT_CONFIG_NAME) {
-    files.push(path.join(confdir, env));
+    files.push(path.join(confdir, DEFAULT_CONFIG_NAME));
+
+    if (env !== DEFAULT_CONFIG_NAME) {
+      files.push(path.join(confdir, env));
+    }
+
+    files
+      .map(foundConfig)
+      .filter(configPath => !!configPath)
+      .forEach(configPath => {
+        if (configPath.endsWith('.js')) {
+          config.load(require(configPath));
+        } else {
+          config.loadFile(configPath)
+        }
+      });
+
   }
 
-  files
-    .map(foundConfig)
-    .filter(configPath => !!configPath)
-    .forEach(configPath => {
-      if (configPath.endsWith('.js')) {
-        config.load(require(configPath));
-      } else {
-        config.loadFile(configPath)
-      }
-    });
+  if (isObject(dynConfig)) {
+    config.load(dynConfig);
+  }
 
   if (!config.get(BASEURL_KEY)) {
     config.set(BASEURL_KEY, DEFAULT_BASEURL);

@@ -11,33 +11,9 @@ const VIEW_CONFIG_KEYS = ['views', 'view engine', 'view cache'];
 
 module.exports = bootstrap;
 
+
 function bootstrap(options) {
-  options = options || {};
-  // options.onconfig = options.onconfig || noop; // OUI
-  options.mountpath = options.mountpath || null; // OUI
-  options.inheritViews = !!options.inheritViews;
-  // options.uncaughtException
-
-  const {basedir, configFolder} = options;
-  const config = configurator(basedir, configFolder);
-
-  // TODO utiliser endgame
-  // endgame(options.uncaughtException);
-
-  function setObject(app, obj) {
-    Object.keys(obj).forEach(key => {
-      const value = obj[key];
-
-      if (key === 'express') {
-        setObject(app, value);
-        return;
-      }
-
-      app.set(key, value);
-    });
-
-    return app;
-  }
+  const {config} = options;
 
   function mount(app) {
     var settings, defaults, handler;
@@ -45,7 +21,6 @@ function bootstrap(options) {
     // Get configured settings and express defaults.
     settings = config.express;
     defaults = Object.keys(app.settings);
-
     if (options.inheritViews) {
       // If the mounted app SHOULD inherit views, delete from local
       // kraken settings so the app settings aren't updated later.
@@ -122,6 +97,21 @@ function bootstrap(options) {
     setObject(app, config);
 
     console.log('express settings\n', app.settings);
+
+    return app;
+  }
+
+  function setObject(app, obj) {
+    Object.keys(obj).forEach(key => {
+      const value = obj[key];
+
+      if (key === 'express') {
+        setObject(app, value);
+        return;
+      }
+
+      app.set(key, value);
+    });
 
     return app;
   }
