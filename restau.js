@@ -4,6 +4,7 @@ const Model = require('./Model')
 const ModelService = require('./ModelService')
 const Service = require('./Service')
 const caller = require('caller');
+const camelCase = require('to-camel-case');
 const clone = require('clone');
 const {compose} = require('compose-middleware');
 const enrouten = require('express-enrouten');
@@ -14,15 +15,18 @@ const http = require('http');
 const {isArray, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is')
 const knex = require('knex');
 const path = require('path');
+const setValue = require('set-value');
 
 const DEFAULT_CONFIG_FOLDER = 'config';
 const DEFAULT_CONNECTOR_NAME = 'default';
 const DEFAULT_ENV_NAME = 'development';
 const DEFAULT_ERROR_STATUS = 500;
 const DEFAULT_RESPONSE_STATUS = 200;
+const DEFAULT_RESPONSE_CODES = [201, 202, 204, 400, 401, 403, 404, 405, 500, 501, 503];
 const JOKER_METHODS = ['DELETE', 'GET', 'POST', 'PUT', 'PATCH'];
-const {STATUS_CODES} = http;
+const STATUS_CODES = http.STATUS_CODES;
 const SUCCESS_WHEN_STATUS_LT = 400;
+const CUSTOM_RESPONSES = createCustomResponses(DEFAULT_RESPONSE_CODES);
 
 const d = debug('express:restau');
 
@@ -83,7 +87,7 @@ function restau() {
     }
 
     app[name] = function () {
-      method.apply(app, slice(arguments));
+      method.apply(app, toArray(arguments));
       return app;
     };
 
@@ -156,6 +160,7 @@ function restau() {
           flow.unshift(function (req, res, next) {
             res.ok = responseOk;
             res.ko = responseKo;
+            Object.assign(res, CUSTOM_RESPONSES);
             next();
           });
 
@@ -376,13 +381,13 @@ function restau() {
   }
 
   function useModel() {
-    const modelPrepared = prepareThing('model', models, slice(arguments));
+    const modelPrepared = prepareThing('model', models, toArray(arguments));
 
     return modelPrepared;
   }
 
   function useService() {
-    let servicePrepared = prepareThing('service', services, slice(arguments));
+    let servicePrepared = prepareThing('service', services, toArray(arguments));
 
     if (servicePrepared && !isArray(servicePrepared)) {
       servicePrepared = [servicePrepared];
@@ -470,6 +475,21 @@ function compact(x) {
 //   return app;
 // }
 
+function createCustomResponses(codes) {
+  return codes
+    .map(code => [camelCase(STATUS_CODES[code]), code])
+    .map(response => {
+      const [method, code] = response;
+      const handler = code < SUCCESS_WHEN_STATUS_LT ? responseOk : responseKo;
+
+      return [method, function () {
+        return handler.apply(this, [code].concat(toArray(arguments)));
+      }];
+    })
+    .map(fromPair)
+    .reduce((r, curr) => Object.assign(r, curr));
+}
+
 function fromPair(pair) {
   if (!isArray(pair)) {
     pair = Array.prototype.slice.call(arguments);
@@ -503,7 +523,7 @@ function normalizeSlashs(str, starts, ends) {
 }
 
 function parseOptions(args) {
-  let [opts, configFolder] = slice(args);
+  let [opts, configFolder] = toArray(args);
 
   if (isString(opts)) {
     opts = {
@@ -527,7 +547,7 @@ function parseOptions(args) {
 }
 
 function responseKo() {
-  const args = slice(arguments);
+  const args = toArray(arguments);
   let data = args[0] || {};
 
   if (isNumber(data)) {
@@ -622,4 +642,8 @@ function start(port, host) {
   })
 
   return server;
+}
+
+function toArray(obj) {
+  return slice(obj);
 }
