@@ -8,6 +8,8 @@ const caller = require('caller');
 const camelCase = require('to-camel-case');
 const clone = require('clone');
 const {compose} = require('compose-middleware');
+const curry = require('curry')
+const {dirname, join, sep} = require('path');
 const enrouten = require('express-enrouten');
 const errors = require('./errors');
 const express = require('express');
@@ -16,7 +18,6 @@ const flatten = require('arr-flatten');
 const http = require('http');
 const {isArray, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is')
 const knex = require('knex');
-const path = require('path');
 const setValue = require('set-value');
 const unirest = require('unirest');
 
@@ -304,8 +305,8 @@ function restau() {
     }
 
     if (isString(obj)) {
-      if (obj.startsWith('.' + path.sep) || obj.startsWith('..' + path.sep)) {
-        return path.join(options.basedir, obj);
+      if (obj.startsWith('.' + sep) || obj.startsWith('..' + sep)) {
+        return join(options.basedir, obj);
       }
     }
 
@@ -335,7 +336,7 @@ function restau() {
     name = name || DEFAULT_CONNECTOR_NAME;
 
     if (db === true) {
-      db = ['.', [env, 'sqlite3'].join('.')].join(path.sep);
+      db = ['.', [env, 'sqlite3'].join('.')].join(sep);
     }
 
     if (isString(db)) {
@@ -502,16 +503,23 @@ function client(registry, options) {
 
       const handler = function () {
         const args = toArray(arguments);
-        const reqPath = [baseurl, resolveUrlParams(path, args)].join('');
-        const request = unirest(method, reqPath);
+        const paramsCount = path.split(':').length - 1;
+        const reqArgs = args.slice(paramsCount);
+        const reqPath = paramsCount ? resolveUrlParams(path, args.slice(0, paramsCount)) : path;
+        const reqUrl = [baseurl, reqPath].join('');
 
-        if (isObject(options.headers)) {
-          request.headers(options.headers);
+        let [headers, body, callback] = reqArgs;
+
+        if (isFunction(headers)) {
+          callback = headers;
+          headers = body;
         }
 
-console.log("REQ", method, reqPath)
+        if (isObject(options.headers)) {
+          headers = Object.assign({}, options.headers, headers || {});
+        }
 
-        return request;
+        return unirest(method, reqUrl, headers, body, callback);
       };
 
       if (!api[name][endpoint]) {
@@ -609,7 +617,7 @@ function parseOptions(args) {
   }
 
   opts = opts || {};
-  opts.basedir = opts.basedir || path.dirname(caller(2));
+  opts.basedir = opts.basedir || dirname(caller(2));
   opts.configFolder = configFolder || opts.configFolder || DEFAULT_CONFIG_FOLDER;
   opts.db = opts.db || null;
   opts.connections
