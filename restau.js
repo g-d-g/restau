@@ -3,11 +3,13 @@
 const Model = require('./Model')
 const ModelService = require('./ModelService')
 const Service = require('./Service')
+const bodyParser = require('body-parser');
 const caller = require('caller');
 const camelCase = require('to-camel-case');
 const clone = require('clone');
 const {compose} = require('compose-middleware');
 const enrouten = require('express-enrouten');
+const errors = require('./errors');
 const express = require('express');
 const debug = require('debug');
 const flatten = require('arr-flatten');
@@ -16,6 +18,7 @@ const {isArray, isFunction, isNumber, isObject, isString, isUndefined} = require
 const knex = require('knex');
 const path = require('path');
 const setValue = require('set-value');
+const unirest = require('unirest');
 
 const DEFAULT_CONFIG_FOLDER = 'config';
 const DEFAULT_CONNECTOR_NAME = 'default';
@@ -43,7 +46,10 @@ function restau() {
   const env = process.env.NODE_ENV || DEFAULT_ENV_NAME;
   const options = parseOptions(arguments);
 
-  behavior({ behavior, bindModel, start, useConnector, useModel, useService });
+  behavior({ behavior, bindModel, useConnector, useModel, useService });
+
+  app.client = client.bind(app, registry);
+  app.start = start.bind(app);
 
   useConnector(options.db);
   useModel(options.models);
@@ -420,6 +426,7 @@ function restau() {
           if (!isArray(methodAndRoutes)) {
             return;
           }
+
           methodAndRoutes.forEach(methodAndRoute => {
             const methodPos = methodAndRoute.indexOf(' ');
             let method = 'GET';
@@ -431,7 +438,7 @@ function restau() {
             }
 
             route = [basepath, route].join('/');
-            route = normalizeSlashs(route, true, false);
+            route = normalizeSlashes(route, true, false);
 
             if (method === '*') {
               JOKER_METHODS.forEach(value => entry.routes.push({
@@ -461,6 +468,61 @@ function restau() {
   }
 
   return app;
+}
+
+function client(registry, options) {
+  const api = {};
+
+  if (isString(options)) {
+    options = {
+      baseurl: options
+    };
+  }
+
+  options = options || {};
+  options.baseurl = options.baseurl || null;
+  options.headers = options.headers || null;
+
+  if (!isString(options.baseurl)) {
+    throw new Error('MISSING_BASEURL');
+  }
+
+  const baseurl = normalizeSlashes(options.baseurl, false, false);
+
+  Object.keys(registry).forEach(key => {
+    const service = registry[key];
+    const {name, routes} = service;
+
+    if (!api[name]) {
+      api[name] = {};
+    }
+
+    routes.forEach(route => {
+      const {path, method, endpoint} = route;
+
+      const handler = function () {
+        const args = toArray(arguments);
+        const reqPath = [baseurl, resolveUrlParams(path, args)].join('');
+        const request = unirest(method, reqPath);
+
+        if (isObject(options.headers)) {
+          request.headers(options.headers);
+        }
+
+console.log("REQ", method, reqPath)
+
+        return request;
+      };
+
+      if (!api[name][endpoint]) {
+        api[name][endpoint] = handler;
+      }
+
+      api[name][endpoint][method.toLowerCase()] = handler;
+    });
+  });
+
+  return api;
 }
 
 function compact(x) {
@@ -500,7 +562,7 @@ function fromPair(pair) {
   return setValue({}, key, value);
 }
 
-function normalizeSlashs(str, starts, ends) {
+function normalizeSlashes(str, starts, ends) {
   if (isUndefined(starts)) {
     starts = true;
   }
@@ -509,10 +571,25 @@ function normalizeSlashs(str, starts, ends) {
     ends = false;
   }
 
-  str = str.split('/').filter(x => !!x).join('/');
+  const protocolPos = str.indexOf('://');
+  const baseurlPos = protocolPos > -1 && str.indexOf('/', protocolPos + 3);
+  let baseurl;
 
-  if (starts === true && !str.startsWith('/')) {
+  if (isNumber(baseurlPos) && baseurlPos > -1) {
+    baseurl = str.substring(0, baseurlPos);
+    str = str.substring(baseurlPos);
+  }
+
+  if (str.length && str !== '/') {
+    str = str.split('/').filter(x => !!x).join('/');
+  }
+
+  if (!baseurl && starts === true && !str.startsWith('/')) {
     str = '/' + str;
+  }
+
+  if (baseurl) {
+    str = str === '/' ? baseurl : [baseurl, str].join('/');
   }
 
   if (ends === true && !str.endsWith('/')) {
@@ -544,6 +621,67 @@ function parseOptions(args) {
   opts.responseWrapper = opts.responseWrapper || null;
 
   return opts;
+}
+
+function remote(registry, options) {
+  const client = client(registry, options);
+  const routes = [];
+  // options.baseurl
+  // options.headers
+
+  Object.keys(registry).forEach(key => {
+    const service = registry[key];
+    const name = service.name;
+
+    service.routes.forEach(route => {
+      const {path, method, endpoint} = route;
+      const handler = function (req, res, next) {
+        const args = Object.keys(req.params).map(key => req.params[key]);
+
+
+        // préparer la requête en fonction de la méthode (si c post, utiliser send())
+
+        // charger les paramètres pour la requête
+        // client[service.name][endpoint][method]
+      };
+
+      // routes.push({ path, method, handler });
+    });
+  });
+
+  //return enrouten({ routes });
+}
+
+function resolveUrlParams(path, args) {
+  const reqPath = [];
+  let pathParsed = path;
+  let paramsCount = path.split(':').length - 1;
+
+  if (!paramsCount) {
+    reqPath.push(path);
+  }
+
+  if (paramsCount) {
+    if (args.length < paramsCount) {
+      throw new Error('MISSING_ARGS');
+    }
+
+    while (paramsCount--) {
+      const doubleDot = pathParsed.indexOf('/:');
+      const slash = pathParsed.indexOf('/', doubleDot + 1);
+
+      reqPath.push(pathParsed.substring(0, doubleDot + 1));
+      reqPath.push(args.shift());
+
+      pathParsed = slash > -1 ? pathParsed.substring(slash) : null;
+
+      if (paramsCount === 0 && pathParsed) {
+        reqPath.push(pathParsed);
+      }
+    }
+  }
+
+  return reqPath.join('');
 }
 
 function responseKo() {
@@ -625,7 +763,7 @@ function slice(obj, start, end) {
 
 function start(port, host) {
   const rest = this;
-  const app = express().use(rest);
+  const app = express();
   const server = http.createServer(app);
 
   host = host || rest.get('port');
@@ -634,6 +772,12 @@ function start(port, host) {
   if (!port) {
     throw new Error('MISSING_PORT');
   }
+
+  app
+    .use(bodyParser.urlencoded({ extended: true }))
+    .use(bodyParser.json())
+    .use(rest)
+    .use(errors.handler());
 
   server.listen(port, host);
 
