@@ -70,7 +70,7 @@ module.exports = class CustomError extends Error {
    // this.name = this.constructor.name;
    this.type = 'CustomError';
    this.name = name;
-   this.message = message;
+   this.message = this.msg = message;
    this.code = code;
    this.className = className;
    this.data = newData;
@@ -85,6 +85,7 @@ module.exports = class CustomError extends Error {
     return {
       name: this.name,
       message: this.message,
+      msg: this.msg,
       code: this.code,
       className: this.className,
       data: this.data,

@@ -1,8 +1,5 @@
 'use strict';
 
-const Model = require('./Model')
-const ModelService = require('./ModelService')
-const Service = require('./Service')
 const bodyParser = require('body-parser');
 const caller = require('caller');
 const camelCase = require('to-camel-case');
@@ -50,6 +47,7 @@ function restau() {
   behavior({ behavior, bindModel, useConnector, useModel, useService });
 
   app.client = client.bind(app, registry);
+  app.remote = remote.bind(app, registry);
   app.start = start.bind(app);
 
   useConnector(options.db);
@@ -180,6 +178,10 @@ function restau() {
 
             output
               .then(data => {
+                if (data instanceof Error) {
+                  throw data;
+                }
+
                 res.data = data;
                 next();
               })
@@ -632,32 +634,79 @@ function parseOptions(args) {
 }
 
 function remote(registry, options) {
-  const client = client(registry, options);
-  const routes = [];
-  // options.baseurl
-  // options.headers
+  const api = client(registry, options);
+  const mw = express();
+  const services = {};
 
   Object.keys(registry).forEach(key => {
     const service = registry[key];
     const name = service.name;
 
+    if (!services[name]) {
+      services[name] = {};
+    }
+
     service.routes.forEach(route => {
       const {path, method, endpoint} = route;
-      const handler = function (req, res, next) {
-        const args = Object.keys(req.params).map(key => req.params[key]);
 
+      if (!services[name][endpoint]) {
+        services[name][endpoint] = {};
+      }
 
-        // préparer la requête en fonction de la méthode (si c post, utiliser send())
+      if (!services[name][endpoint][method.toLowerCase()]) {
+        const handler = function (req, res, next) {
+          const args = Object.keys(req.params).map(key => req.params[key]);
+          const request = api[service.name][endpoint][method.toLowerCase()];
 
-        // charger les paramètres pour la requête
-        // client[service.name][endpoint][method]
-      };
+          args.push(req.headers)
+          args.push(req.body);
+          args.push(function (result) {
+            res.status(result.status).send(result.body);
+          });
 
-      // routes.push({ path, method, handler });
+          request.apply(null, args)
+        }
+
+        services[name][endpoint][method.toLowerCase()] = handler;
+      }
     });
   });
 
-  //return enrouten({ routes });
+  mw.on('mount', function (parent) {
+    const routes = [];
+
+    Object.keys(registry).forEach(key => {
+      const service = registry[key];
+      const name = service.name;
+
+      service.routes.forEach(route => {
+        const {path, method, endpoint} = route;
+        const handler = services[name][endpoint][method.toLowerCase()];
+
+        routes.push({ path, method, handler });
+      });
+    });
+
+    let mountpath = mw.mountpath;
+    if (mountpath === '/' && options.mountpath) {
+      mountpath = options.mountpath;
+    }
+
+    parent._router.stack.pop();
+
+    if (!parent.restau) {
+      parent.restau = {
+        models: {},
+        services: {}
+      };
+    }
+
+    Object.assign(parent.restau.services, services);
+
+    parent.use(mountpath, enrouten({ routes }));
+  });
+
+  return mw;
 }
 
 function resolveUrlParams(path, args) {
