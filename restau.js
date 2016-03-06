@@ -44,7 +44,7 @@ function restau() {
   const env = process.env.NODE_ENV || DEFAULT_ENV_NAME;
   const options = parseOptions(arguments);
 
-  behavior({ behavior, bindModel, useConnector, useModel, useService });
+  behavior({ behavior, configure, bindModel, useConnector, useModel, useService });
 
   app.client = client.bind(app, registry);
   app.remote = remote.bind(app, registry);
@@ -539,13 +539,13 @@ function compact(x) {
   return !!x;
 }
 
-// function configure(fn) {
-//   const app = this;
-//
-//   fn.call(app);
-//
-//   return app;
-// }
+function configure(fn) {
+  const app = this;
+
+  fn.call(app);
+
+  return app;
+}
 
 function createCustomResponses(codes) {
   return codes
