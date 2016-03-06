@@ -232,7 +232,7 @@ function restau() {
                 resolve(res.result);
               });
             });
-          }
+          };
 
           handlers[endpoint] = compose([flow, function (req, res, next) {
             const result = res.result;
@@ -527,7 +527,6 @@ function client(registry, options) {
       if (!api[name][endpoint]) {
         api[name][endpoint] = handler;
       }
-
       api[name][endpoint][method.toLowerCase()] = handler;
     });
   });
@@ -638,60 +637,7 @@ function remote(registry, options) {
   const mw = express();
   const services = {};
 
-  Object.keys(registry).forEach(key => {
-    const service = registry[key];
-    const name = service.name;
-
-    if (!services[name]) {
-      services[name] = {};
-    }
-
-    service.routes.forEach(route => {
-      const {path, method, endpoint} = route;
-
-      if (!services[name][endpoint]) {
-        services[name][endpoint] = {};
-      }
-
-      if (!services[name][endpoint][method.toLowerCase()]) {
-        const handler = function (req, res, next) {
-          const args = Object.keys(req.params).map(key => req.params[key]);
-          const request = api[service.name][endpoint][method.toLowerCase()];
-
-          args.push(req.headers)
-          args.push(req.body);
-          args.push(function (result) {
-            res.status(result.status).send(result.body);
-          });
-
-          request.apply(null, args)
-        }
-
-        services[name][endpoint][method.toLowerCase()] = handler;
-      }
-    });
-  });
-
   mw.on('mount', function (parent) {
-    const routes = [];
-
-    Object.keys(registry).forEach(key => {
-      const service = registry[key];
-      const name = service.name;
-
-      service.routes.forEach(route => {
-        const {path, method, endpoint} = route;
-        const handler = services[name][endpoint][method.toLowerCase()];
-
-        routes.push({ path, method, handler });
-      });
-    });
-
-    let mountpath = mw.mountpath;
-    if (mountpath === '/' && options.mountpath) {
-      mountpath = options.mountpath;
-    }
-
     parent._router.stack.pop();
 
     if (!parent.restau) {
@@ -701,7 +647,81 @@ function remote(registry, options) {
       };
     }
 
-    Object.assign(parent.restau.services, services);
+    const routes = [];
+
+    Object.keys(registry).forEach(key => {
+      const service = registry[key];
+      const name = service.name;
+
+      if (!services[name]) {
+        services[name] = {};
+      }
+
+      if (!parent.restau.services[name]) {
+        parent.restau.services[name] = {};
+      }
+
+      service.routes.forEach(route => {
+        const {path, method, endpoint} = route;
+
+        if (!services[name][endpoint] || !services[name][endpoint][method.toLowerCase()]) {
+          const handler = function (req, res, next) {
+            const args = Object.keys(req.params).map(key => req.params[key]);
+            const paramsCount = path.split(':').length - 1;
+
+            if (args.length < paramsCount) {
+              throw new Error((paramsCount - args.length) + ' param(s) missing to use ' + name + '.' + endpoint + ' with route ' + method + ' ' + path + ' (' + caller(3) + ')');
+            }
+
+            const request = api[service.name][endpoint][method.toLowerCase()];
+
+            args.push(req.headers)
+            args.push(req.body);
+            args.push(function (result) {
+              res.status(result.status).send(result.body);
+            });
+            request.apply(null, args)
+          }
+
+          if (!services[name][endpoint]) {
+            services[name][endpoint] = handler;
+          }
+
+          services[name][endpoint][method.toLowerCase()] = handler;
+        }
+
+        const handler = services[name][endpoint][method.toLowerCase()];
+
+        if (!parent.restau.services[name][endpoint] || !parent.restau.services[name][endpoint][method.toLowerCase()]) {
+          const servicePromised = function (req, res, next) {
+            return new Promise(function (resolve, reject) {
+              handler(req, res, err => {
+                if (err) {
+                  return reject(err);
+                }
+
+                resolve(res.result);
+              });
+            });
+          };
+
+          if (!parent.restau.services[name][endpoint]) {
+            parent.restau.services[name][endpoint] = servicePromised;
+          }
+
+          if (!parent.restau.services[name][endpoint][method.toLowerCase()]) {
+            parent.restau.services[name][endpoint][method.toLowerCase()] = servicePromised;
+          }
+        }
+
+        routes.push({ path, method, handler });
+      });
+    });
+
+    let mountpath = mw.mountpath;
+    if (mountpath === '/' && options.mountpath) {
+      mountpath = options.mountpath;
+    }
 
     parent.use(mountpath, enrouten({ routes }));
   });
