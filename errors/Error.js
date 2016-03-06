@@ -10,7 +10,7 @@ const debug = require('debug')('feathers-errors');
 // http://stackoverflow.com/questions/33870684/why-doesnt-instanceof-work-on-instances-of-error-subclasses-under-babel-node
 // https://github.com/loganfsmyth/babel-plugin-transform-builtin-extend
 
-module.exports = class FeathersError extends Error {
+module.exports = class CustomError extends Error {
  constructor(msg, name, code, className, data) {
    msg = msg || 'Error';
 
@@ -36,6 +36,21 @@ module.exports = class FeathersError extends Error {
      message = msg;
    }
 
+   if (typeof name === 'object') {
+     data = name;
+     name = undefined;
+   }
+
+   if (typeof code === 'object') {
+     data = code;
+     code = undefined;
+   }
+
+   if (typeof className === 'object') {
+     data = className;
+     className = undefined;
+   }
+
    if (data) {
      // NOTE(EK): To make sure that we are not messing
      // with immutable data, just make a copy.
@@ -53,7 +68,7 @@ module.exports = class FeathersError extends Error {
    // NOTE (EK): Babel doesn't support this so
    // we have to pass in the class name manually.
    // this.name = this.constructor.name;
-   this.type = 'FeathersError';
+   this.type = 'CustomError';
    this.name = name;
    this.message = message;
    this.code = code;
