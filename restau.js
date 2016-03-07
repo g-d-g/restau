@@ -14,6 +14,7 @@ const debug = require('debug');
 const flatten = require('arr-flatten');
 const http = require('http');
 const {isArray, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is')
+const jsonWebToken = require('jsonwebtoken');
 const knex = require('knex');
 const setValue = require('set-value');
 const unirest = require('unirest');
@@ -44,7 +45,7 @@ function restau() {
   const env = process.env.NODE_ENV || DEFAULT_ENV_NAME;
   const options = parseOptions(arguments);
 
-  behavior({ behavior, configure, bindModel, useConnector, useModel, useService });
+  behavior.call(app, { behavior, configure, bindModel, useConnector, useModel, useService });
 
   app.client = client.bind(app, registry);
   app.remote = remote.bind(app, registry);
@@ -65,6 +66,11 @@ function restau() {
       };
     }
 
+    if (options.jwt) {
+      parent.restau.signToken = signToken;
+      parent.restau.verifyToken = verifyToken;
+    }
+
     let mountpath = app.mountpath;
     if (mountpath === '/' && options.mountpath) {
       mountpath = options.mountpath;
@@ -76,27 +82,32 @@ function restau() {
     parent.use(mountpath, enrouten({ routes }));
   });
 
-  function behavior(name, method) {
-    if (isObject(name)) {
-      Object.keys(name).forEach(n => behavior(n, name[n]));
-      return app;
+  function bindModel(connectorName, modelLinked) {
+    if (!connectorName) {
+      return;
     }
 
-    if (isFunction(name)) {
-      method = name;
-      name = method.name;
+    if (isObject(connectorName)) {
+      return Object.keys(connectorName).forEach(connector => bindModel(connector, connectorName[connector]));
     }
 
-    if (app[name]) {
-      throw new Error('key already in used: ' + name);
+    if (!connectors[connectorName]) {
+      throw new Error('Connector "' + connectorName + '" does not exist');
     }
 
-    app[name] = function () {
-      method.apply(app, toArray(arguments));
-      return app;
-    };
+    if (isArray(modelLinked)) {
+      return modelLinked.forEach(model => bindModel(connectorName, model));
+    }
 
-    return app;
+    if (isFunction(modelLinked)) {
+      modelLinked = modelLinked.name;
+    }
+
+    if (!models[modelLinked]) {
+      throw new Error('Model "' + modelLinked + '" does not exist');
+    }
+
+    links[modelLinked] = connectorName;
   }
 
   function findConnectorName(model) {
@@ -155,12 +166,57 @@ function restau() {
       const handlers = {};
 
       entry.routes.forEach(route => {
-        const {path, method, endpoint, hooks} = route;
+        const {path, method, endpoint, hooks, auth} = route;
         const handler = service[endpoint];
 
         if (!handlers[endpoint]) {
           const {before, after} = hooks;
           var flow = before;
+
+          if (auth !== null) {
+            if (!options.jwt) {
+              throw new Error('MISSING_JWT_SECRET');
+            }
+
+            flow.unshift(function (req, res, next) {
+              let token = extractToken(req);
+              let tokenDecoded;
+              let verifyError;
+
+              try {
+                tokenDecoded = verifyToken(token);
+              } catch (err) {
+                verifyError = err;
+              }
+
+              req.jwt = {
+                encoded: token,
+                decoded: tokenDecoded
+              };
+
+              if (auth === false && tokenDecoded) {
+                return next(new errors.Forbidden(verifyError || 'Access reserved for unsigned users'));
+              }
+
+              if (auth && !tokenDecoded) {
+                return next(new errors.Forbidden(verifyError || 'Access reserved for signed users'));
+              }
+
+              if (isArray(auth) && tokenDecoded) {
+                tokenDecoded.roles = tokenDecoded.roles || [];
+
+                if (auth[0] === 'U' && !auth.slice(1).reduce((r, curr) => !r || tokenDecoded.roles.indexOf(curr) > -1, true)) {
+                  return next(new errors.Forbidden('Has not every roles needed: ' + auth.slice(1)));
+                }
+
+                if (!auth.reduce((r, curr) => r || tokenDecoded.roles.indexOf(curr) > -1, false)) {
+                  return next(new errors.Forbidden('Has not one role needed: ' + auth));
+                }
+              }
+
+              next();
+            });
+          }
 
           flow.unshift(function (req, res, next) {
             res.ok = responseOk;
@@ -325,6 +381,18 @@ function restau() {
     }
   }
 
+  function signToken(payload, opts, callback) {
+    if (isFunction(options)) {
+      callback = opts;
+      opts = undefined;
+    }
+
+    opts = opts || {};
+    opts = Object.assign({}, options.jwt.options, opts);
+
+    return jsonWebToken.sign(payload, options.jwt.secret, opts, callback);
+  }
+
   function useConnector(name, db) {
     if (arguments.length === 1) {
       db = name;
@@ -361,34 +429,6 @@ function restau() {
     }
   }
 
-  function bindModel(connectorName, modelLinked) {
-    if (!connectorName) {
-      return;
-    }
-
-    if (isObject(connectorName)) {
-      return Object.keys(connectorName).forEach(connector => bindModel(connector, connectorName[connector]));
-    }
-
-    if (!connectors[connectorName]) {
-      throw new Error('Connector "' + connectorName + '" does not exist');
-    }
-
-    if (isArray(modelLinked)) {
-      return modelLinked.forEach(model => bindModel(connectorName, model));
-    }
-
-    if (isFunction(modelLinked)) {
-      modelLinked = modelLinked.name;
-    }
-
-    if (!models[modelLinked]) {
-      throw new Error('Model "' + modelLinked + '" does not exist');
-    }
-
-    links[modelLinked] = connectorName;
-  }
-
   function useModel() {
     const modelPrepared = prepareThing('model', models, toArray(arguments));
 
@@ -404,9 +444,11 @@ function restau() {
 
     if (isArray(servicePrepared)) {
       servicePrepared.forEach(service => {
-        let {name, basepath, routes} = service;
+        let {name, basepath, routes, auth} = service;
+
         basepath = basepath || '/';
         routes = routes || {};
+        auth = auth || {};
 
         const entry = {
           name,
@@ -434,6 +476,11 @@ function restau() {
             const methodPos = methodAndRoute.indexOf(' ');
             let method = 'GET';
             let route = methodAndRoute;
+            let routeAuth = auth[endpoint] || null;
+
+            if (isString(routeAuth)) {
+              routeAuth = [routeAuth];
+            }
 
             if (methodPos > -1) {
               method = methodAndRoute.substring(0, methodPos).toUpperCase();
@@ -448,7 +495,8 @@ function restau() {
                   path: route,
                   method: value,
                   endpoint,
-                  hooks
+                  hooks,
+                  auth: routeAuth
                 }));
 
               return;
@@ -458,7 +506,8 @@ function restau() {
               path: route,
               method,
               endpoint,
-              hooks
+              hooks,
+              auth: routeAuth
             });
           });
         });
@@ -469,6 +518,45 @@ function restau() {
 
     return servicePrepared;
   }
+
+  function verifyToken(payload, opts, callback) {
+    if (isFunction(options)) {
+      callback = opts;
+      opts = undefined;
+    }
+
+    opts = opts || {};
+    opts = Object.assign({}, options.jwt.options, opts);
+
+    return jsonWebToken.verify(payload, options.jwt.secret, opts, callback);
+  }
+
+  return app;
+}
+
+
+
+function behavior(name, method) {
+  const app = this;
+
+  if (isObject(name)) {
+    Object.keys(name).forEach(n => behavior.call(app, n, name[n]));
+    return app;
+  }
+
+  if (isFunction(name)) {
+    method = name;
+    name = method.name;
+  }
+
+  if (app[name]) {
+    throw new Error('key already in used: ' + name);
+  }
+
+  app[name] = function () {
+    method.apply(app, toArray(arguments));
+    return app;
+  };
 
   return app;
 }
@@ -561,6 +649,37 @@ function createCustomResponses(codes) {
     .reduce((r, curr) => Object.assign(r, curr));
 }
 
+function extractToken(req) {
+  var authorization = req.header('Authorization') || req.header('Access-Token');
+
+  if (!authorization && req.cookies) {
+    authorization = req.cookies.authorization || req.cookies.access_token;
+  }
+
+  if (!authorization && req.body) {
+    authorization = req.body.authorization || req.body.access_token;
+    delete req.body.authorization;
+    delete req.body.access_token;
+  }
+
+  if (!authorization && req.query) {
+    authorization = req.query.authorization || req.query.access_token;
+    delete req.query.authorization;
+    delete req.query.access_token;
+  }
+
+  if (typeof authorization === 'string') {
+    let token = authorization;
+    const spacePosition = token.indexOf(' ');
+
+    if (spacePosition) {
+      token = authorization.substring(spacePosition + 1);
+    }
+
+    return token;
+  }
+}
+
 function fromPair(pair) {
   if (!isArray(pair)) {
     pair = Array.prototype.slice.call(arguments);
@@ -608,6 +727,29 @@ function normalizeSlashes(str, starts, ends) {
   return str;
 }
 
+function parseJwtOptions(options) {
+  options = options || null;
+
+  if (isString(options)) {
+    options = {
+      secret: options
+    };
+  }
+
+  if (isObject(options)) {
+    const secret = options.secret;
+
+    if (!secret) {
+      throw new Error('MISSING_JWT_SECRET');
+    }
+
+    options = omit(options, 'secret');
+    options = Object.assign({}, { secret, options });
+  }
+
+  return options;
+}
+
 function parseOptions(args) {
   let [opts, configFolder] = toArray(args);
 
@@ -621,15 +763,26 @@ function parseOptions(args) {
   opts.basedir = opts.basedir || dirname(caller(2));
   opts.configFolder = configFolder || opts.configFolder || DEFAULT_CONFIG_FOLDER;
   opts.db = opts.db || null;
-  opts.connections
   opts.inheritViews = !!opts.inheritViews;
   opts.models = opts.models || null;
   opts.links = opts.links || null;
   opts.mountpath = opts.mountpath || null;
   opts.services = opts.services || null;
   opts.responseWrapper = opts.responseWrapper || null;
+  opts.jwt = parseJwtOptions(opts.jwt);
 
   return opts;
+}
+
+function omit(obj, omittedKeys) {
+  if (isString(omittedKeys)) {
+    omittedKeys = [omittedKeys];
+  }
+
+  return Object.keys(obj)
+    .filter(key => omittedKeys.indexOf(key) === -1)
+    .map(key => fromPair(key, obj[key]))
+    .reduce((r, curr) => Object.assign(r, curr));
 }
 
 function remote(registry, options) {

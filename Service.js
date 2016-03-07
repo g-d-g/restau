@@ -17,6 +17,10 @@ module.exports = class Service {
     return;
   }
 
+  static get auth() {
+    return;
+  }
+
   static hooks(endpoint) {
     let {before, after} = this;
 
