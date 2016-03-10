@@ -14,6 +14,7 @@ const InternalServerError = require('./InternalServerError');
 const NotImplemented = require('./NotImplemented');
 const RequestTimeout = require('./RequestTimeout');
 const ServiceUnavailable = require('./ServiceUnavailable');
+const ValidationError = require('./ValidationError');
 const handler = require('./handler');
 
 module.exports = Object.assign(CustomError, {

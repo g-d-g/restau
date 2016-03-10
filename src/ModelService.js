@@ -1,7 +1,7 @@
 'use strict';
 
 const Service = require('./Service');
-const {isString} = require('core-util-is');
+const {isString} = require('./utils');
 
 module.exports = ModelService;
 
@@ -55,6 +55,7 @@ function ModelService(modelName, basepath) {
 
     create(req, res, next) {
       const data = req.body;
+
       return this.model.query().insert(data);
     }
 
