@@ -11,7 +11,7 @@ npm install restau --save
 ## Example
 
 ```javascript
-const restau = require('.');
+const restau = require('restau');
 
 class HelloWorld extends restau.Service {
   static get name() {
