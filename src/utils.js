@@ -188,7 +188,7 @@ function omit(obj, omittedKeys) {
 
   return keys
     .filter(key => omittedKeys.indexOf(key) === -1)
-    .map(key => fromPair(key, obj[key]))
+    .map(key => fromPairs(key, obj[key]))
     .reduce((r, curr) => Object.assign(r, curr));
 }
 
