@@ -267,7 +267,7 @@ function remote(options) {
   options = options || {};
   options.baseurl = options.baseurl || null;
   options.headers = options.headers || {};
-  options.bindRoutes = options.bindRoutes || true;
+  options.bindRoutes = !isUndefined(options.bindRoutes) ? options.bindRoutes : true;
 
   if (!isString(options.baseurl)) {
     throw new Error('BASEURL_MISSING');
