@@ -8,13 +8,13 @@ class HelloWorld extends restau.Service {
   }
 
   static get basepath() {
-    return '/hello'
+    return '/hello';
   }
 
-  static get routes() {
+  static get endpoints() {
     return {
-      sayHello: ['/', '/:who'],
-    }
+      sayHello: ['/', '/:who']
+    };
   }
 
   sayHello(req, res, next) {

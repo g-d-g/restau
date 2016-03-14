@@ -9,7 +9,7 @@ const deepAssign = require('deep-assign');
 const {dirname, join, sep} = require('path');
 const flatten = require('arr-flatten');
 const http = require('http');
-const {isArray, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is');
+const {isArray, isBoolean, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is');
 const mapObject = require('map-obj');
 const {mixin} = require('uberproto');
 const setValue = require('set-value');
@@ -22,15 +22,22 @@ const DEFAULT_ACCESSOR = {
 };
 
 const DEFAULT_ERROR_STATUS = 500;
-const DEFAULT_RESPONSE_CODES = [201, 202, 204, 400, 401, 402, 403, 404, 405, 406, 408, 409, 422, 500, 501, 503];
 const DEFAULT_RESPONSE_STATUS = 200;
 const SUCCESS_WHEN_STATUS_LT = 400;
+const SEP = sep;
 const STATUS_CODES = http.STATUS_CODES;
-const CUSTOM_RESPONSES = createCustomResponses(DEFAULT_RESPONSE_CODES);
+const CUSTOM_RESPONSE_CODES = [201, 202, 204, 400, 401, 402, 403, 404, 405, 406, 408, 409, 422, 500, 501, 503];
+const CUSTOM_RESPONSES = createCustomResponses(CUSTOM_RESPONSE_CODES);
 
 
 module.exports = {
+  CUSTOM_RESPONSE_CODES,
   CUSTOM_RESPONSES,
+  DEFAULT_ERROR_STATUS,
+  DEFAULT_RESPONSE_STATUS,
+  SEP,
+  STATUS_CODES,
+  SUCCESS_WHEN_STATUS_LT,
   caller,
   camelCase,
   clone,
@@ -45,6 +52,7 @@ module.exports = {
   fromPairs,
   isArguments,
   isArray,
+  isBoolean,
   isFunction,
   isNil,
   isNumber,
@@ -58,10 +66,10 @@ module.exports = {
   omit,
   normalizeSlashes,
   requireSafe,
+  resolvePath,
   resolveUrlParams,
   responseKo,
   responseOk,
-  sep,
   setValue,
   slice,
   toArray,
@@ -83,10 +91,14 @@ function createCustomResponses(codes) {
     .reduce((r, curr) => Object.assign(r, curr));
 }
 
-function defineAccessor(obj, prop, descriptor) {
+function defineAccessor(obj, prop, descriptor, setter) {
   descriptor = descriptor || {};
   descriptor = isFunction(descriptor) ? { get: descriptor } : descriptor;
   descriptor =  Object.assign({}, DEFAULT_ACCESSOR, descriptor || {})
+
+  if (setter) {
+    descriptor.set = setter;
+  }
 
   Object.defineProperty(obj, prop, descriptor);
 }
@@ -188,6 +200,31 @@ function requireSafe(filepath) {
       throw err;
     }
   }
+}
+
+
+function resolvePath(basepath, value) {
+  const resolver = (obj) => {
+    if (isArray(obj)) {
+      return obj.map(value => resolvePath(basepath, value));
+    }
+
+    if (isObject(obj)) {
+      return mapObject(obj, (key, value) => [key, resolvePath(basepath, value)]);
+    }
+
+    if (isString(obj) && (obj.startsWith('.') || obj.startsWith('..'))) {
+      return join(basepath, obj);
+    }
+
+    return obj;
+  };
+
+  if (value) {
+    return resolver(value);
+  }
+
+  return resolver;
 }
 
 function resolveUrlParams(path, args) {

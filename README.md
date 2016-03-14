@@ -11,6 +11,8 @@ npm install restau --save
 ## Example
 
 ```javascript
+'use strict';
+
 const restau = require('restau');
 
 class HelloWorld extends restau.Service {
@@ -19,13 +21,13 @@ class HelloWorld extends restau.Service {
   }
 
   static get basepath() {
-    return '/hello'
+    return '/hello';
   }
 
-  static get routes() {
+  static get endpoints() {
     return {
-      sayHello: ['/', '/:who'],
-    }
+      sayHello: ['/', '/:who']
+    };
   }
 
   sayHello(req, res, next) {
@@ -49,8 +51,10 @@ restau()
 
 ## TODO
 
-* Populate created_at and updated_at in Model
-* Support multiple methods in service routes (like post|put /foo)
+* Fix "socket hand up" issue when remote service POST|PATCH|PUT was called with undefined body
+* Insert real client IP in remote headers
+* Move auth hook into /hooks/populateToken (when auth has value, it's called that new hook)
+* Support service configuration in restau(options)
 
 ## License
 

@@ -1,11 +1,15 @@
 'use strict';
 
 const Service = require('./Service');
-const {isString} = require('./utils');
+const {isFunction, isString} = require('./utils');
 
 module.exports = ModelService;
 
 function ModelService(modelName, basepath) {
+  if (isFunction(modelName)) {
+    modelName = modelName.name;
+  }
+
   if (!isString(modelName) || !modelName.length) {
     throw new Error('No model name');
   }
@@ -24,7 +28,7 @@ function ModelService(modelName, basepath) {
       return '/' + basepath;
     }
 
-    static get routes() {
+    static get endpoints() {
       return {
         find: 'GET /',
         get: 'GET /:id',
@@ -39,7 +43,7 @@ function ModelService(modelName, basepath) {
     }
 
     get model() {
-      return this.app.restau.models[modelName];
+      return this.app.models[modelName];
     }
 
     find(req, res, next) {
