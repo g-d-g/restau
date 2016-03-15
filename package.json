@@ -31,7 +31,8 @@
     "request": "^2.69.0",
     "set-value": "^0.3.3",
     "to-camel-case": "^1.0.0",
-    "uberproto": "^1.2.0"
+    "uberproto": "^1.2.0",
+    "uuid": "^2.0.1"
   },
   "engines": {
     "node": ">=5.3.0",

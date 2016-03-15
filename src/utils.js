@@ -13,6 +13,7 @@ const {isArray, isBoolean, isFunction, isNumber, isObject, isString, isUndefined
 const mapObject = require('map-obj');
 const {mixin} = require('uberproto');
 const setValue = require('set-value');
+const uuid = require('uuid');
 
 const DEFAULT_ACCESSOR = {
   configurable: false,
@@ -73,7 +74,8 @@ module.exports = {
   setValue,
   slice,
   toArray,
-  toPairs
+  toPairs,
+  uuid
 };
 
 function createCustomResponses(codes) {
