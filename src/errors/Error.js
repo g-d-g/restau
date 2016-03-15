@@ -10,6 +10,7 @@ module.exports = class CustomError extends ExtendableError {
     let errors;
     let message;
     let newData;
+    let original;
 
     if (typeof msg === 'number') {
       let tmp = msg;
@@ -24,6 +25,7 @@ module.exports = class CustomError extends ExtendableError {
       data = { fields: msg.data };
     }
     else if (msg instanceof Error) {
+      original = msg;
       message = msg.message || 'Error';
       code = code || msg.code || msg.statusCode;
       // NOTE (EK): This is typically to handle validation errors
@@ -81,6 +83,7 @@ module.exports = class CustomError extends ExtendableError {
     this.className = className;
     this.data = newData;
     this.errors = errors || {};
+    this.original = original;
   }
 
   // NOTE (EK): A little hack to get around `message` not

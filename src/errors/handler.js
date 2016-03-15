@@ -13,17 +13,19 @@ module.exports = function (options) {
       let errorOutput;
       let errorJson = err.toJSON();
       let {code, msg, data} = errorJson;
+      let stack;
 
       code = code || 500;
       msg = msg !== 'Error' ? msg : undefined;
+      stack = err.original ? err.original.stack : err.stack;
       errorOutput = responseKo.call(res, code, msg, data);
 
       if (code >= 500 && req.app.get('env') !== 'production') {
-        errorOutput.stack = err.stack;
+        errorOutput.stack = stack;
       }
 
       if (code >= 500) {
-        console.error(err.stack);
+        console.error(stack);
       }
 
       return res.send(errorOutput);
