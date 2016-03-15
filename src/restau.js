@@ -164,17 +164,13 @@ function client(options) {
           const uri = paramsCount ? resolveUrlParams(path, args.slice(0, paramsCount)) : path;
           const json = ['patch', 'post', 'put'].indexOf(method) > -1
 
-          let [headers, body, callback] = reqArgs;
-
-          if (isFunction(headers)) {
-            callback = headers;
-            headers = body;
-          }
+          let [headers, qs, body, callback] = reqArgs;
 
           headers = isObject(headers) ? headers : {};
+          qs = isObject(qs) ? qs : {};
           body = json ? body : undefined;
 
-          const reqOpts = { uri, method, headers, body, json };
+          const reqOpts = { uri, method, headers, qs, body, json };
 
           if (callback) {
             return makeRequest(reqOpts, callback);
@@ -316,7 +312,8 @@ function remote(options) {
               headers = isObject(headers) ? headers : {};
               headers = Object.assign({}, options.headers, headers);
 
-              args.push(req.headers)
+              args.push(req.headers);
+              args.push(req.query);
               args.push(req.body);
 
               return stub.apply(null, args);
@@ -335,7 +332,13 @@ function remote(options) {
             if (!parent.services[name][key]) {
               parent.services[name][key] = function () {
                 return handler.apply(null, toArray(arguments))
-                  .then(response => response.body);
+                  .then(response => {
+                    try {
+                      return JSON.parse(response.body);
+                    } catch (err) {
+                      return response.body;
+                    }
+                  });
               };
             }
 
