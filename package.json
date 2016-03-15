@@ -1,6 +1,6 @@
 {
   "name": "restau",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Express and fast microservice",
   "main": "index.js",
   "scripts": {
