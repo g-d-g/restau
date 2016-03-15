@@ -47,7 +47,7 @@ function ModelService(modelName, basepath) {
     }
 
     find(req, res, next) {
-      return this.model.query();
+      return this.model.query().where(req.query);
     }
 
     get(req, res, next) {
