@@ -13,6 +13,7 @@ const request = require('request');
 const {
   CUSTOM_RESPONSES,
   SEP,
+  SUCCESS_WHEN_STATUS_LT,
   caller,
   clone,
   compose,
@@ -170,6 +171,12 @@ function client(options) {
           qs = isObject(qs) ? qs : {};
           body = json ? body : undefined;
 
+          if (headers['content-length']) {
+            // XXX temporal fix when content-length does not correspond
+            // to ((String) body).length
+            delete headers['content-length'];
+          }
+
           const reqOpts = { uri, method, headers, qs, body, json };
 
           if (callback) {
@@ -300,14 +307,18 @@ function remote(options) {
 
           if (!services[name][key] || !services[name][key][method]) {
             const handler = function (req, res, next) {
-              const args = Object.keys(req.params).map(key => req.params[key]);
-              const paramsCount = path.split(':').length - 1;
+              let args = Object.keys(req.params).map(key => req.params[key]);
+              let paramsCount = path.split(':').length - 1;
+              let {headers, body} = req;
 
               if (args.length < paramsCount) {
                 throw new Error((paramsCount - args.length) + ' param(s) missing to use ' + name + '.' + endpoint + ' with route ' + method + ' ' + path + ' (' + caller(3) + ')');
               }
 
-              let {headers, body} = req;
+              if (args.length > paramsCount) {
+                args = args.slice(0, paramsCount);
+              }
+
 
               headers = isObject(headers) ? headers : {};
               headers = Object.assign({}, options.headers, headers);
@@ -331,14 +342,22 @@ function remote(options) {
 
             if (!parent.services[name][key]) {
               parent.services[name][key] = function () {
-                return handler.apply(null, toArray(arguments))
-                  .then(response => {
-                    try {
-                      return JSON.parse(response.body);
-                    } catch (err) {
-                      return response.body;
-                    }
-                  });
+                const args = toArray(arguments);
+                return new Promise((resolve, reject) => {
+                  handler.apply(null, args)
+                    .then(response => {
+                      if (response.statusCode >= SUCCESS_WHEN_STATUS_LT) {
+                        reject(response.body)
+                      }
+
+                      try {
+                        resolve(JSON.parse(response.body));
+                      } catch (err) {
+                        resolve(response.body);
+                      }
+                    })
+                    .catch(reject);
+                });
               };
             }
 
