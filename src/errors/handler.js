@@ -1,7 +1,7 @@
 'use strict';
 
 const CustomError = require('./Error');
-const {responseKo} = require('../utils');
+const {isObject, responseKo} = require('../utils');
 
 module.exports = function (options) {
   return function (err, req, res, next) {
@@ -29,6 +29,10 @@ module.exports = function (options) {
       }
 
       return res.send(errorOutput);
+    }
+
+    if (isObject(err)) {
+      return res.json(err);
     }
 
     next(err);
