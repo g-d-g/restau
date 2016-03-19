@@ -1,7 +1,7 @@
 'use strict';
 
 const CustomError = require('./Error');
-const {isObject, responseKo} = require('../utils');
+const {isNumber, isObject, responseKo} = require('../utils');
 
 module.exports = function (options) {
   return function (err, req, res, next) {
@@ -18,21 +18,21 @@ module.exports = function (options) {
       code = code || 500;
       msg = msg !== 'Error' ? msg : undefined;
       stack = err.original ? err.original.stack : err.stack;
-      errorOutput = responseKo.call(res, code, msg, data);
+      err = responseKo.call(res, code, msg, data);
 
       if (code >= 500 && req.app.get('env') !== 'production') {
-        errorOutput.stack = stack;
+        err.stack = stack;
       }
-
-      if (code >= 500) {
-        console.error(stack);
-      }
-
-      return res.send(errorOutput);
     }
 
-    if (isObject(err)) {
-      return res.json(err);
+    if (isObject(err) && err.code) {
+      let code = isNumber(err.code) && err.code < 600 ? err.code : 500;
+
+      if (code >= 500) {
+        console.error(err.stack || err.message);
+      }
+
+      return res.status(code).json(err);
     }
 
     next(err);
