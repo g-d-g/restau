@@ -1,10 +1,16 @@
 'use strict';
 
 const CustomError = require('./Error');
-const {isNumber, isObject, responseKo} = require('../utils');
+const {isNumber, isObject, isString, responseKo} = require('../utils');
 
 module.exports = function (options) {
   return function (err, req, res, next) {
+    if (isString(err)) {
+      try {
+        err = JSON.parse(err);
+      } catch (e) {}
+    }
+
     if (err instanceof Error && !err.toJSON) {
       err = new CustomError(err);
     }
