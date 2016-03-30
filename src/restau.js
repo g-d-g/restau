@@ -73,6 +73,9 @@ function restau(options) {
   forEachKey(OPTION_CONNECTION_KEYS, options, app.connection.bind(app));
   forEachKey(OPTION_MIDDLEWARE_KEYS, options, app.use.bind(app));
 
+  options.host && app.set('host', options.host);
+  options.port && app.set('port', options.port);
+
   app.on('mount', parent => {
     prepareMount.call(app, options);
 
