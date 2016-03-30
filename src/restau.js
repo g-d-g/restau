@@ -18,6 +18,7 @@ const {
   clone,
   compose,
   debug,
+  deepAssign,
   defineAccessor,
   dirname,
   flatten,
@@ -78,6 +79,11 @@ function restau(options) {
 
   app.on('mount', parent => {
     prepareMount.call(app, options);
+
+    if (options.config) {
+      parent.config = parent.config || {};
+      deepAssign(parent.config, options.config);
+    }
 
     parent.bindings = Object.assign({}, app.bindings, parent.bindings);
     parent.connections = Object.assign({}, app.connections, parent.connections);
