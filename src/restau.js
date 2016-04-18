@@ -265,7 +265,6 @@ function listen(port, host) {
   let {createServer} = http;
 
   if (ssl) {
-    console.log('XXX', ssl)
     createServer = https.createServer.bind(https, ssl);
   }
 
