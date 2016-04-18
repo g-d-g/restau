@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const errors = require('./errors');
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const Model = require('./Model');
 const Service = require('./Service');
 const jsonWebToken = require('jsonwebtoken');
@@ -74,8 +75,7 @@ function restau(options) {
   forEachKey(OPTION_CONNECTION_KEYS, options, app.connection.bind(app));
   forEachKey(OPTION_MIDDLEWARE_KEYS, options, app.use.bind(app));
 
-  options.host && app.set('host', options.host);
-  options.port && app.set('port', options.port);
+  ['host', 'port', 'ssl'].forEach(key => options[key] && app.set(key, options[key]));
 
   app.on('mount', parent => {
     prepareMount.call(app, options);
@@ -261,12 +261,20 @@ function listen(port, host) {
     throw new Error('PORT_MISSING');
   }
 
+  const ssl = this.get('ssl');
+  let {createServer} = http;
+
+  if (ssl) {
+    console.log('XXX', ssl)
+    createServer = https.createServer.bind(https, ssl);
+  }
+
   const app = express()
     .use(bodyParser.urlencoded({ extended: true }))
     .use(bodyParser.json())
     .use(this);
 
-  return http.createServer(app).listen(port, host);
+  return createServer(app).listen(port, host);
 }
 
 function remote(options) {
