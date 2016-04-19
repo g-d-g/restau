@@ -268,23 +268,26 @@ function listen(port, host) {
     .use(this);
 
   const ssl = this.get('ssl');
-  const forwarderPort = ssl.forwarder || 80;
   let {createServer} = http;
 
   if (ssl) {
+    const createServerFn = https.createServer.bind(https, ssl);
+
     createServer = function () {
-      var args = Array.prototype.slice.call(arguments);
+      const args = Array.prototype.slice.call(arguments);
 
-      http
-        .createServer(express().get('*', (req, res, next) => {
-          var base = req.headers.host.indexOf(':') === -1 ? req.headers.host : req.headers.host.split(':').shift();
-          var url = format('https://%s%s%s', base, port == 443 ? '' : ':' + port, req.path);
+      if (ssl.forwarder) {
+        http
+          .createServer(express().get('*', function (req, res, next) {
+            var base = req.headers.host.indexOf(':') === -1 ? req.headers.host : req.headers.host.split(':').shift();
+            var url = format('https://%s%s%s', base, port == 443 ? '' : ':' + port, req.path);
 
-          res.redirect(url);
-        }))
-        .listen(forwarderPort, host);
+            res.redirect(url);
+          }))
+          .listen(ssl.forwarder, host);
+      }
 
-      return https.createServer.bind(https, ssl).apply(args);
+      return createServerFn.apply(createServerFn, args);
     };
   }
 
