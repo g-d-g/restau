@@ -24,6 +24,7 @@ const {
   dirname,
   flatten,
   forEachKey,
+  format,
   mixin,
   isArray,
   isBoolean,
@@ -261,17 +262,31 @@ function listen(port, host) {
     throw new Error('PORT_MISSING');
   }
 
-  const ssl = this.get('ssl');
-  let {createServer} = http;
-
-  if (ssl) {
-    createServer = https.createServer.bind(https, ssl);
-  }
-
   const app = express()
     .use(bodyParser.urlencoded({ extended: true }))
     .use(bodyParser.json())
     .use(this);
+
+  const ssl = this.get('ssl');
+  const forwarderPort = ssl.forwarder || 80;
+  let {createServer} = http;
+
+  if (ssl) {
+    createServer = function () {
+      var args = Array.prototype.slice.call(arguments);
+
+      http
+        .createServer(express().get('*', (req, res, next) => {
+          var base = req.headers.host.indexOf(':') === -1 ? req.headers.host : req.headers.host.split(':').shift();
+          var url = format('https://%s%s%s', base, port == 443 ? '' : ':' + port, req.path);
+
+          res.redirect(url);
+        }))
+        .listen(forwarderPort, host);
+
+      return https.createServer.bind(https, ssl).apply(args);
+    };
+  }
 
   return createServer(app).listen(port, host);
 }
