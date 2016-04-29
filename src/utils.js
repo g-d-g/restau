@@ -77,6 +77,7 @@ module.exports = {
   slice,
   toArray,
   toPairs,
+  tryParseJson,
   uuid
 };
 
@@ -362,4 +363,14 @@ function toPairs(obj) {
   }
 
   return obj;
+}
+
+function tryParseJson(str) {
+  var r = str;
+
+  try {
+    r = JSON.parse(r);
+  } catch (e) {}
+
+  return r;
 }
