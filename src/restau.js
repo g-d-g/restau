@@ -320,6 +320,16 @@ function remote(options) {
 
     prepareMount.call(mw, options, 'remote');
 
+    Object.keys(app.models).forEach(function (name) {
+      if (!parent.models) {
+        parent.models = {};
+      }
+
+      if (!parent.models[name]) {
+        parent.models[name] = app.models[name];
+      }
+    });
+
     Object.keys(app.services).forEach(name => {
       const service = app.services[name];
 
