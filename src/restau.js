@@ -44,7 +44,7 @@ const {
   toPairs
 } = require('./utils');
 
-const application = { binding, client, connection, listen, remote, use };
+const application = { binding, client, configure, connection, listen, remote, use };
 const d = debug('express:restau');
 
 const DEFAULT_CONNECTOR_NAME = 'default';
@@ -58,7 +58,6 @@ module.exports = restau;
 
 process.on('uncaughtException', x=>console.log(x.stack))
 
-// TODO add configure public API (restau.configure(() => ))
 function restau(options) {
   options = parseOptions(options);
 
@@ -216,6 +215,15 @@ function client(options) {
   return api;
 }
 
+function configure() {
+  const args = toArray(arguments);
+  const fn = args.shift();
+
+  fn.apply(this, args);
+
+  return this;
+}
+
 function connection(name, db) {
   const app = this;
 
@@ -274,7 +282,7 @@ function listen(port, host) {
     const createServerFn = https.createServer.bind(https, ssl);
 
     createServer = function () {
-      const args = Array.prototype.slice.call(arguments);
+      const args = toArray(arguments);
 
       if (ssl.forwarder) {
         http
