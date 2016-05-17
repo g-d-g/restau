@@ -877,12 +877,18 @@ function normalizeServiceRoutes(endpoints) {
       }
 
       routes.forEach(route => {
-        let methodPos = route.lastIndexOf(' ');
         let method = 'get';
 
-        if (methodPos > -1) {
-          method = route.substring(0, methodPos).toLowerCase();
-          route = route.substring(methodPos + 1);
+        if (isArray(route) && route.length === 2) {
+          method = route[0];
+          route = route[1];
+        } else {
+          let methodPos = route.lastIndexOf(' ');
+
+          if (methodPos > -1) {
+            method = route.substring(0, methodPos).toLowerCase();
+            route = route.substring(methodPos + 1);
+          }
         }
 
         route = normalizeSlashes(route, true, false);
