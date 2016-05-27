@@ -13,6 +13,7 @@ const http = require('http');
 const {isArray, isBoolean, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is');
 const mapObject = require('map-obj');
 const {mixin} = require('uberproto');
+const request = require('request');
 const setValue = require('set-value');
 const uuid = require('uuid');
 
@@ -68,6 +69,7 @@ module.exports = {
   mixin,
   omit,
   normalizeSlashes,
+  request,
   requireSafe,
   resolvePath,
   resolveUrlParams,
