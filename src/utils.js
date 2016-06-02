@@ -1,111 +1,131 @@
 'use strict';
 
 const caller = require('caller');
-const camelCase = require('to-camel-case');
-const clone = require('clone');
-const {compose} = require('compose-middleware');
 const debug = require('debug');
-const deepAssign = require('deep-assign');
 const {dirname, join, sep} = require('path');
 const flatten = require('arr-flatten');
-const {format} = require('util');
-const http = require('http');
+const getValue = require('get-value');
 const {isArray, isBoolean, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is');
 const mapObject = require('map-obj');
-const {mixin} = require('uberproto');
+const request = require('request');
 const setValue = require('set-value');
-const uuid = require('uuid');
 
-const DEFAULT_ACCESSOR = {
-  configurable: false,
-  enumerable: true,
-  get: () => { throw new Error('getter missing'); },
-  set: () => { throw new Error('setter missing'); }
-};
-
-const DEFAULT_ERROR_STATUS = 500;
-const DEFAULT_RESPONSE_STATUS = 200;
-const SUCCESS_WHEN_STATUS_LT = 400;
-const SEP = sep;
-const STATUS_CODES = http.STATUS_CODES;
-const CUSTOM_RESPONSE_CODES = [201, 202, 204, 400, 401, 402, 403, 404, 405, 406, 408, 409, 422, 500, 501, 503];
-const CUSTOM_RESPONSES = createCustomResponses(CUSTOM_RESPONSE_CODES);
-
+const ANONYMOUSE_CLASS_NAMES = [
+  '_class'
+];
 
 module.exports = {
-  CUSTOM_RESPONSE_CODES,
-  CUSTOM_RESPONSES,
-  DEFAULT_ERROR_STATUS,
-  DEFAULT_RESPONSE_STATUS,
-  SEP,
-  STATUS_CODES,
-  SUCCESS_WHEN_STATUS_LT,
+  sep,
   caller,
-  camelCase,
-  clone,
+  checkIsClassWithId,
   compose,
-  createCustomResponses,
   debug,
-  deepAssign,
-  defineAccessor,
+  deprecateMethod,
   dirname,
+  findKeyWhichContains,
   flatten,
   forEachKey,
-  format,
   fromPairs,
+  getValue,
+  inheritMethod,
+  inheritProperty,
   isArguments,
   isArray,
   isBoolean,
+  isClass,
   isFunction,
   isNil,
   isNumber,
-  isntNil,
   isObject,
+  isPromise,
   isString,
   isUndefined,
+  isntNil,
   join,
   mapObject,
-  mixin,
-  omit,
+  // mixin,
   normalizeSlashes,
+  request,
   requireSafe,
   resolvePath,
-  resolveUrlParams,
-  responseKo,
-  responseOk,
   setValue,
-  slice,
   toArray,
-  toPairs,
-  tryParseJson,
-  uuid
+  tryParseJSON
 };
 
-function createCustomResponses(codes) {
-  return codes
-    .map(code => [camelCase(STATUS_CODES[code]), code])
-    .map(response => {
-      const [method, code] = response;
-      const handler = code < SUCCESS_WHEN_STATUS_LT ? responseOk : responseKo;
-
-      return [method, function () {
-        return handler.apply(this, [code].concat(toArray(arguments)));
-      }];
-    })
-    .map(fromPairs)
-    .reduce((r, curr) => Object.assign(r, curr));
-}
-
-function defineAccessor(obj, prop, descriptor, setter) {
-  descriptor = descriptor || {};
-  descriptor = isFunction(descriptor) ? { get: descriptor } : descriptor;
-  descriptor =  Object.assign({}, DEFAULT_ACCESSOR, descriptor || {})
-
-  if (setter) {
-    descriptor.set = setter;
+function checkIsClassWithId(obj) {
+  if (!isClass(obj)) {
+    throw new Error('CLASS_REQUIRED');
   }
 
-  Object.defineProperty(obj, prop, descriptor);
+  const id = obj.id || obj.name;
+
+  if (!isString(id) || !id.length || ANONYMOUSE_CLASS_NAMES.indexOf(id) > -1) {
+    throw new Error('ID_MISSING');
+  }
+}
+
+function compose() {
+  const args = toArray(arguments);
+  const stack = flatten(args);
+  const thisArg = this;
+
+  for (const handler of stack) {
+    if (!isFunction(handler)) {
+      throw new TypeError('Handlers must be a function');
+    }
+  }
+
+  return function middleware(req, res, done) {
+    let index = 0;
+
+    function next(err) {
+      if (index === stack.length) {
+        return done(err);
+      }
+
+      const handler = stack[index++];
+
+      if (handler.length === 4) {
+        if (err) {
+          handler.call(thisArg, err, req, res, next);
+        } else {
+          next(err);
+        }
+      } else {
+        if (err) {
+          next(err);
+        } else {
+          handler.call(thisArg, req, res, next);
+        }
+      }
+    }
+
+    next();
+  };
+}
+
+
+function deprecateMethod(obj, ancient, successor) {
+  if (isObject(ancient)) {
+    Object.keys(ancient).forEach(x => deprecateMethod(obj, x, ancient[x]));
+    return obj;
+  }
+
+  obj[ancient] = (function () {
+    console.error(`DEPRECATED USAGE
+> The method "${ancient}" is deprecated
+> Please use "${successor}" instead
+> Check in file ${caller()}`);
+
+    return this[successor].apply(this, toArray(arguments));
+  }).bind(obj);
+
+  return obj;
+}
+
+function findKeyWhichContains(obj, value) {
+  return Object.keys(obj).find(x => obj[x].indexOf(value) > -1);
 }
 
 function forEachKey(keys, obj, fn) {
@@ -123,24 +143,77 @@ function fromPairs(pairs) {
     pairs = [pairs];
   }
 
+  pairs = pairs.filter(x => x.length);
+
+  if (!pairs.length) {
+    return {};
+  }
+
   return pairs
-    .map(pair => setValue({}, pair[0], pair[1]))
+    .map(pair => ({ [pair[0]]: !isUndefined(pair[1]) ? pair[1] : pair[0] }))
     .reduce((prev, curr) => Object.assign(prev, curr));
+}
+
+function inheritMethod(from, to, key) {
+  if (isArray(key)) {
+    key.forEach(x => inheritMethod(from, to, x));
+    return to;
+  }
+
+  let origin = to[key];
+
+  while (origin && isFunction(origin.origin)) {
+    origin = origin.origin;
+  }
+
+  to[key] = from[key].bind(from);
+
+  if (origin) {
+    to[key].origin = origin.bind(to);
+  }
+
+  return to;
+}
+
+function inheritProperty(from, to, key) {
+  if (isArray(key)) {
+    key.forEach(x => inheritProperty(from, to, x));
+    return to;
+  }
+
+  Object.defineProperty(to, key, {
+    enumerable: true,
+    get: () => from[key]
+  });
+
+  return to;
 }
 
 function isArguments(obj) {
   return obj && !isArray(obj) && !!obj[Symbol.iterator];
 }
 
-function isNil(value) {
-  return !isntNil(value);
+function isClass(obj) {
+  return obj && isFunction(obj.constructor) && isObject(obj.prototype);
 }
 
-function isntNil(value) {
-  return !!value;
+function isNil(obj) {
+  return !isntNil(obj);
+}
+
+function isPromise(obj) {
+  return obj && isFunction(obj);
+}
+
+function isntNil(obj) {
+  return !!obj;
 }
 
 function normalizeSlashes(str, starts, ends) {
+  if (isArray(str)) {
+    str = str.join('/');
+  }
+
   if (isUndefined(starts)) {
     starts = true;
   }
@@ -148,6 +221,8 @@ function normalizeSlashes(str, starts, ends) {
   if (isUndefined(ends)) {
     ends = false;
   }
+
+  str = str || '/';
 
   const protocolPos = str.indexOf('://');
   let baseurl;
@@ -162,7 +237,9 @@ function normalizeSlashes(str, starts, ends) {
   }
 
   if (str.length && str !== '/') {
-    str = str.split('/').filter(x => !!x).join('/');
+    str = str.split('/')
+      .map(x => x.trim())
+      .filter(x => !!x).join('/');
   }
 
   if (!baseurl && starts === true && !str.startsWith('/')) {
@@ -180,21 +257,14 @@ function normalizeSlashes(str, starts, ends) {
   return str;
 }
 
-function omit(obj, omittedKeys) {
-  if (isString(omittedKeys)) {
-    omittedKeys = [omittedKeys];
+function requireSafe(filepath) {
+  try {
+    return require(filepath);
+  } catch (err) {
+    if (err.code !== 'MODULE_NOT_FOUND' || err.message.indexOf(filepath) === -1) {
+      throw err;
+    }
   }
-
-  const keys = Object.keys(obj);
-
-  if (keys.length === 1) {
-    return omittedKeys.indexOf(keys[0]) > -1 ? {} : obj;
-  }
-
-  return keys
-    .filter(key => omittedKeys.indexOf(key) === -1)
-    .map(key => fromPairs(key, obj[key]))
-    .reduce((r, curr) => Object.assign(r, curr));
 }
 
 function requireSafe(filepath) {
@@ -207,138 +277,20 @@ function requireSafe(filepath) {
   }
 }
 
-
-function resolvePath(basepath, value) {
-  const resolver = (obj) => {
-    if (isArray(obj)) {
-      return obj.map(value => resolvePath(basepath, value));
-    }
-
-    if (isObject(obj)) {
-      return mapObject(obj, (key, value) => [key, resolvePath(basepath, value)]);
-    }
-
-    if (isString(obj) && (obj.startsWith('.') || obj.startsWith('..'))) {
-      return join(basepath, obj);
-    }
-
-    return obj;
-  };
-
-  if (value) {
-    return resolver(value);
+function resolvePath(basepath, obj) {
+  if (isArray(obj)) {
+    return obj.map(value => resolvePath(basepath, value));
   }
 
-  return resolver;
-}
-
-function resolveUrlParams(path, args) {
-  const reqPath = [];
-  let pathParsed = path;
-  let paramsCount = path.split(':').length - 1;
-
-  if (!paramsCount) {
-    reqPath.push(path);
+  if (isObject(obj)) {
+    return mapObject(obj, (key, value) => [key, resolvePath(basepath, value)]);
   }
 
-  if (paramsCount) {
-    if (args.length < paramsCount) {
-      throw new Error('MISSING_ARGS');
-    }
-
-    while (paramsCount--) {
-      const doubleDot = pathParsed.indexOf('/:');
-      const slash = pathParsed.indexOf('/', doubleDot + 1);
-
-      reqPath.push(pathParsed.substring(0, doubleDot + 1));
-      reqPath.push(args.shift());
-
-      pathParsed = slash > -1 ? pathParsed.substring(slash) : null;
-
-      if (paramsCount === 0 && pathParsed) {
-        reqPath.push(pathParsed);
-      }
-    }
+  if (isString(obj) && (obj.startsWith('.') || obj.startsWith('..'))) {
+    return join(basepath, obj);
   }
 
-  return reqPath.join('');
-}
-
-function responseKo() {
-  const args = toArray(arguments);
-  let data = args[0] || {};
-
-  if (isNumber(data)) {
-    data = {
-      code: data
-    };
-  }
-
-  if (isString(data)) {
-    data = {
-      message: data
-    };
-  }
-
-  if (!data.code) {
-    data.code = DEFAULT_ERROR_STATUS;
-  }
-
-  args[0] = data;
-
-  return responseOk.apply(this, args);
-}
-
-function responseOk(data) {
-  data = data || {};
-
-  if (isNumber(data)) {
-    data = {
-      code: data
-    };
-  }
-
-  if (isString(data)) {
-    data = {
-      message: data
-    };
-  }
-
-  if (!data.code) {
-    data.code = DEFAULT_RESPONSE_STATUS;
-  }
-
-  if (isString(arguments[1])) {
-    data.message = arguments[1];
-  }
-
-  if (isObject(arguments[1])) {
-    Object.assign(data, arguments[1])
-  }
-
-  if (isObject(arguments[2])) {
-    Object.assign(data, arguments[2])
-  }
-
-  if (this.statusCode !== DEFAULT_RESPONSE_STATUS) {
-    data.code = this.statusCode;
-  }
-
-  if (data.code && !data.message) {
-    data.message = STATUS_CODES[data.code];
-  }
-
-  data.success = data.code < SUCCESS_WHEN_STATUS_LT;
-
-  if (this.statusCode !== data.code) {
-    this.status(data.code);
-  }
-
-  return Object.assign({ success: null, code: null, message: null }, data);
-}
-
-function slice(obj, start, end) {
-  return Array.prototype.slice.call(obj, start, end);
+  return obj;
 }
 
 function toArray(obj) {
@@ -357,20 +309,16 @@ function toArray(obj) {
   return obj;
 }
 
-function toPairs(obj) {
-  if (isObject(obj)) {
-    obj = Object.keys(obj).map(key => [key, obj[key]]);
-  }
-
-  return obj;
-}
-
-function tryParseJson(str) {
-  var r = str;
+function tryParseJSON(str) {
+  var result = str;
 
   try {
-    r = JSON.parse(r);
-  } catch (e) {}
+    if (isString(result)) {
+      result = JSON.parse(result);
+    }
+  } catch (e) {
 
-  return r;
+  }
+
+  return result;
 }

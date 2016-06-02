@@ -1,39 +1,26 @@
 'use strict';
 
 module.exports = class Service {
-  static isService(obj) {
-    return obj instanceof Service;
+  static isInstance(obj) {
+    return obj instanceof this;
   }
 
-  static isServiceSubclass(obj) {
-    return obj && obj.prototype instanceof Service;
+  static isSubclass(obj) {
+    return obj && obj.prototype instanceof this;
   }
 
-  static get basepath() {
-    return '/';
-  }
+  static id = null;
+  static basepath = '/';
+  static auth = {};
+  static before = {};
+  static after = {};
+  static autoroute = false;
+  static endpoints = {};
+  static inputs = {};
 
-  static get auth() {
-    return;
-  }
-
-  static get endpoints() {
-    return;
-  }
-
-  static get before() {
-    return;
-  }
-
-  static get after() {
-    return;
-  }
-
-  constructor(app) {
+  setup(app, config) {
     this.app = app;
-  }
-
-  setup(app) {
-
+    this.config = config;
+    console.log('SETTTUUUUUUUUP', this.constructor.id, config)
   }
 };

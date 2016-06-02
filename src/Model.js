@@ -3,12 +3,16 @@
 const ObjectionModel = require('objection').Model;
 
 module.exports = class Model extends ObjectionModel {
-  static isModel(obj) {
-    return obj instanceof Model;
+  static isInstance(obj) {
+    return obj instanceof this;
   }
 
-  static isModelSubclass(obj) {
-    return obj && obj.prototype instanceof Model;
+  static isSubclass(obj) {
+    return obj && obj.prototype instanceof this;
+  }
+
+  static get id() {
+    return this.name;
   }
 
   $beforeInsert() {
