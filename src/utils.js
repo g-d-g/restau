@@ -9,6 +9,7 @@ const deepAssign = require('deep-assign');
 const {dirname, join, sep} = require('path');
 const flatten = require('arr-flatten');
 const {format} = require('util');
+const getValue = require('get-value');
 const http = require('http');
 const {isArray, isBoolean, isFunction, isNumber, isObject, isString, isUndefined} = require('core-util-is');
 const mapObject = require('map-obj');
@@ -53,6 +54,7 @@ module.exports = {
   flatten,
   forEachKey,
   format,
+  getValue,
   fromPairs,
   isArguments,
   isArray,

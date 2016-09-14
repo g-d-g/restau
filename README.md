@@ -51,6 +51,8 @@ restau()
 
 ## TODO
 
+* Add .pipe() method to endpoint (example: services.foo.bar.pipe()) ???
+* Add restau.configure (to add hooks dynamically for example)
 * Fix "socket hand up" issue when remote service POST|PATCH|PUT was called with undefined body
 * Insert real client IP in remote headers
 * Move auth hook into /hooks/populateToken (when auth has value, it's called that new hook)

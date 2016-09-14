@@ -49,7 +49,7 @@ const d = debug('express:restau');
 
 const DEFAULT_CONNECTOR_NAME = 'default';
 const DEFAULT_ENV_NAME = 'development';
-const JOKER_METHODS = ['DELETE', 'GET', 'POST', 'PUT', 'PATCH'];
+const JOKER_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE'];
 const OPTION_BINDING_KEYS = ['binding', 'bindModel', 'bindModels', 'links'];
 const OPTION_CONNECTION_KEYS = ['connection', 'connections', 'db'];
 const OPTION_MIDDLEWARE_KEYS = ['mws_head', 'middleware', 'middlewares', 'mw', 'mws', 'model', 'models', 'service', 'services', 'mws_tail'];
